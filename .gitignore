@@ -1,0 +1,22 @@
+# personal data — never commit
+profile.yaml
+resume.pdf
+resume.*.pdf
+applications/
+cache/
+.env
+.env.*
+
+# python
+__pycache__/
+*.pyc
+.venv/
+.uv/
+dist/
+build/
+*.egg-info/
+
+# editor
+.vscode/
+.idea/
+.DS_Store
