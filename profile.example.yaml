@@ -1,0 +1,57 @@
+# jobpilot profile — copy to profile.yaml and edit.
+# profile.yaml is gitignored; never commit personal data.
+
+name: Your Name
+
+# Absolute path to your base resume. PDF or markdown.
+resume_path: ~/Documents/resume.pdf
+
+# Roles you'd actually take. Used in scoring rubric.
+target_roles:
+  - Senior Engineer
+  - Staff Engineer
+  - Tech Lead
+
+# Top skills/strengths (3-7 items). Used in scoring rubric.
+strengths:
+  - distributed systems
+  - Python
+  - infrastructure
+
+# Below this number, postings are filtered out.
+salary_min_usd: 150000
+
+# Company stages you're open to. Options: seed, series-a, series-b, series-c, public.
+stages: [seed, series-a, series-b, series-c]
+
+# Locations you'd accept. Free-text; matched loosely against JD.
+locations:
+  - Remote-US
+  - San Francisco
+  - New York
+
+# Keywords that auto-reject a posting (case-insensitive substring match on JD).
+dealbreakers:
+  - crypto
+  - gambling
+
+# Companies whose ATS boards to scrape directly.
+# Find the slug in the URL: boards.greenhouse.io/<slug>, jobs.lever.co/<slug>, jobs.ashbyhq.com/<slug>
+ats_boards:
+  greenhouse:
+    - stripe
+    - anthropic
+  lever:
+    - figma
+  ashby:
+    - linear
+
+# Notion DB ID (resolved from .env). Run `jobpilot init-notion` to create one.
+notion:
+  database_id: ${NOTION_DB_ID}
+
+# Postings below this score are dropped. 0-10.
+score_threshold: 6
+
+# Max new rows added to Notion per daily run.
+daily_limit: 25

@@ -1,0 +1,46 @@
+name: Daily Job Hunt
+
+on:
+  schedule:
+    # 15:00 UTC = 8am PT (DST) / 7am PST. Cron is UTC.
+    - cron: '0 15 * * *'
+  workflow_dispatch:  # allow manual trigger from the Actions tab
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Write profile.yaml from secret
+        env:
+          PROFILE_YAML: ${{ secrets.PROFILE_YAML }}
+        run: |
+          if [ -z "$PROFILE_YAML" ]; then
+            echo "::error::PROFILE_YAML secret is not set. Add it under Settings → Secrets → Actions."
+            exit 1
+          fi
+          printf '%s' "$PROFILE_YAML" > profile.yaml
+
+      - name: Run daily pipeline
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
+        run: uv run python -m jobpilot run-daily
+
+      - name: Clean up profile.yaml
+        if: always()
+        run: rm -f profile.yaml

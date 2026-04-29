@@ -1,0 +1,23 @@
+#!/bin/sh
+# jobpilot pre-commit hook — blocks personal data from being committed.
+# Install: cp scripts/pre-commit .git/hooks/pre-commit && chmod +x .git/hooks/pre-commit
+
+set -e
+
+# Files that must never be committed, regardless of .gitignore status.
+BLOCKED='^(profile\.yaml|resume(\..*)?\.pdf|resume.*\.md|\.env|applications/.*|cache/.*)$'
+
+staged=$(git diff --cached --name-only --diff-filter=ACMR)
+
+violations=$(printf '%s\n' "$staged" | grep -E "$BLOCKED" || true)
+
+if [ -n "$violations" ]; then
+    echo "ERROR: refusing to commit personal/sensitive files:"
+    printf '  %s\n' $violations
+    echo
+    echo "These paths are gitignored — if they're staged, you bypassed it (probably 'git add -f')."
+    echo "If you intended to commit a redacted example, name it *.example.* instead."
+    exit 1
+fi
+
+exit 0

@@ -6,6 +6,7 @@ applications/
 cache/
 .env
 .env.*
+!.env.example
 
 # python
 __pycache__/
@@ -15,6 +16,9 @@ __pycache__/
 dist/
 build/
 *.egg-info/
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
 
 # editor
 .vscode/
