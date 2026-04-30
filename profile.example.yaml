@@ -6,6 +6,12 @@ name: Your Name
 # Absolute path to your base resume. PDF or markdown.
 resume_path: ~/Documents/resume.pdf
 
+# Contact info — used only by v1.2 `jobpilot apply-pending` to pre-fill
+# application forms. Optional; leave commented out to skip. profile.yaml is
+# gitignored, so this never leaves your machine.
+# email: you@example.com
+# phone: "+1-555-555-5555"
+
 # Roles you'd actually take. Used in scoring rubric.
 target_roles:
   - Senior Engineer

@@ -61,6 +61,10 @@ class Profile(BaseModel):
     notion: NotionConfig
     score_threshold: float = Field(ge=0, le=10, default=6)
     daily_limit: int = Field(ge=1, default=25)
+    # Optional contact fields used only for v1.2 apply-pending form pre-fill.
+    # These never leave your machine; profile.yaml is gitignored.
+    email: str | None = None
+    phone: str | None = None
 
 
 class ScoredPosting(BaseModel):

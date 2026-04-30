@@ -117,9 +117,27 @@ To cut costs further, override `SCORING_MODEL` in `src/jobpilot/score.py` to `cl
 ## Roadmap
 
 - [x] **v1.0** — Sources (HN + Greenhouse/Lever/Ashby) + Claude scoring + Notion daily digest + GitHub Actions
-- [ ] **v1.1** — `jobpilot tailor` command: generate tailored resume + cover letter for Approved rows
-- [ ] **v1.2** — `jobpilot apply-pending` command + Claude Code skill: open application URL pre-filled in your browser
-- [ ] **v2** — LinkedIn source via authenticated browser (gstack `browse` skill)
+- [x] **v1.1** — `jobpilot tailor`: generate tailored resume + cover letter for Approved rows
+- [x] **v1.2** — `jobpilot apply-pending`: open Materials-Ready URLs in Chromium with form pre-filled
+- [ ] **v2** — LinkedIn source via authenticated browser
+
+## Applying with auto-fill (v1.2)
+
+Once `jobpilot tailor` produces materials and you flip the row to `Materials-Ready`:
+
+```bash
+uv sync --extra apply                  # one-time: install Playwright
+uv run playwright install chromium     # one-time: download browser (~300MB)
+
+# Optional but recommended for resume upload:
+brew install pandoc                    # renders resume.md → resume.pdf
+
+uv run python -m jobpilot apply-pending
+```
+
+For each row, jobpilot opens the application URL in a visible Chromium window, detects the ATS (Greenhouse / Lever / Ashby), and fills name, email, phone, resume upload, and cover letter where it can. You review what got filled, fix anything that didn't, and click submit. The terminal then asks "Submitted? y/N/skip" and updates Notion accordingly.
+
+Auto-fill is best-effort — selectors drift. If a field doesn't fill, the page is still open; just type it in. Unknown ATS providers (LinkedIn, Workday, etc.) load without auto-fill so you can apply manually.
 
 ## Contributing
 
