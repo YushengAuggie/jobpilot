@@ -142,6 +142,13 @@ class NotionSink:
         )
         return list(page.get("results", []))
 
+    def update_status(self, page_id: str, status: str) -> None:
+        """Update the Status select on a single row."""
+        self.client.pages.update(
+            page_id=page_id,
+            properties={"Status": {"select": {"name": status}}},
+        )
+
 
 def _row_properties(sp: ScoredPosting) -> dict[str, Any]:
     p = sp.posting

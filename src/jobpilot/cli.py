@@ -3,18 +3,47 @@
 from __future__ import annotations
 
 import logging
+import re
 from pathlib import Path
+from typing import Any
 
 import typer
 from rich.console import Console
 from rich.table import Table
 
+from jobpilot._jd_fetch import fetch_jd_text
 from jobpilot.config import load_profile, require_env
+from jobpilot.models import JobPosting
 from jobpilot.notion_sink import NotionSink
 from jobpilot.pipeline import run_daily as run_pipeline
+from jobpilot.tailor import Tailorer
 
 app = typer.Typer(help="Daily AI-curated job shortlist + tailored applications.")
 console = Console()
+logger = logging.getLogger(__name__)
+
+
+def _slug(text: str, max_chars: int = 40) -> str:
+    s = re.sub(r"[^\w\s-]", "", text.lower())
+    s = re.sub(r"[\s_-]+", "-", s).strip("-")
+    return s[:max_chars] or "untitled"
+
+
+def _row_field(row: dict[str, Any], name: str, kind: str) -> str | None:
+    """Extract a Notion property value from a row dict. Returns None when missing."""
+    prop = row.get("properties", {}).get(name, {})
+    if kind == "title":
+        items = prop.get("title", [])
+        return items[0].get("plain_text") if items else None
+    if kind == "rich_text":
+        items = prop.get("rich_text", [])
+        return items[0].get("plain_text") if items else None
+    if kind == "url":
+        return prop.get("url")
+    if kind == "select":
+        sel = prop.get("select")
+        return sel.get("name") if sel else None
+    return None
 
 
 def _setup_logging(verbose: bool) -> None:
@@ -122,9 +151,98 @@ def run_daily(
         console.print(sample_table)
 
 
+@app.command("tailor")
+def tailor(
+    limit: int = typer.Option(0, "--limit", help="Cap rows processed (0 = all Approved rows)."),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Generate materials but don't update Notion status."
+    ),
+    output_dir: Path = typer.Option(
+        Path("applications"), "--out", help="Where to save tailored materials."
+    ),
+    verbose: bool = typer.Option(False, "-v", "--verbose"),
+) -> None:
+    """Generate a tailored resume + cover letter for every Notion row marked Approved.
+
+    Materials are saved under <out>/<company>-<slug>/. On success, the row's Status
+    flips to Materials-Ready (skipped under --dry-run).
+    """
+    _setup_logging(verbose)
+    profile = load_profile()
+    sink = NotionSink(token=require_env("NOTION_TOKEN"), database_id=profile.notion.database_id)
+    tailorer = Tailorer()
+
+    rows = sink.get_approved_rows()
+    if limit > 0:
+        rows = rows[:limit]
+
+    if not rows:
+        console.print(
+            "[yellow]No Approved rows in Notion. Flip rows from New to Approved to tailor them.[/yellow]"
+        )
+        return
+
+    console.print(f"[green]Tailoring {len(rows)} approved postings...[/green]\n")
+    table = Table()
+    table.add_column("Company")
+    table.add_column("Title")
+    table.add_column("Output", overflow="fold")
+    table.add_column("Status")
+
+    for row in rows:
+        title = _row_field(row, "Title", "title") or "(untitled)"
+        company = _row_field(row, "Company", "rich_text") or "(unknown)"
+        url = _row_field(row, "URL", "url")
+        if not url:
+            table.add_row(company, title[:50], "—", "[red]no URL[/red]")
+            continue
+
+        try:
+            jd_text = fetch_jd_text(url)
+        except Exception as e:
+            logger.exception("Failed to fetch JD for %s", url)
+            table.add_row(company, title[:50], "—", f"[red]fetch failed: {type(e).__name__}[/red]")
+            continue
+
+        posting = JobPosting(
+            title=title,
+            company=company,
+            url=url,
+            source="hn",  # exact source not relevant to tailoring
+            jd_text=jd_text,
+        )
+
+        try:
+            resume_md, cover_md = tailorer.tailor(profile, posting)
+        except Exception as e:
+            logger.exception("Tailoring failed for %s", url)
+            table.add_row(company, title[:50], "—", f"[red]tailor failed: {type(e).__name__}[/red]")
+            continue
+
+        slug = f"{_slug(company)}-{_slug(title)}"
+        target = output_dir / slug
+        target.mkdir(parents=True, exist_ok=True)
+        (target / "resume.md").write_text(resume_md)
+        (target / "cover_letter.md").write_text(cover_md)
+
+        if not dry_run:
+            try:
+                sink.update_status(row["id"], "Materials-Ready")
+                status_label = "[green]Materials-Ready[/green]"
+            except Exception:
+                logger.exception("Failed to update Notion status for %s", url)
+                status_label = "[yellow]saved, status update failed[/yellow]"
+        else:
+            status_label = "[cyan]dry-run (no status update)[/cyan]"
+
+        table.add_row(company[:30], title[:50], str(target), status_label)
+
+    console.print(table)
+
+
 @app.command("apply-pending")
 def apply_pending() -> None:
-    """Tailor materials and pre-fill applications for Notion rows marked Approved (v1.2)."""
+    """Pre-fill the application form in your browser for Materials-Ready rows (v1.2)."""
     console.print("[yellow]apply-pending: not yet implemented (planned for v1.2)[/yellow]")
 
 
