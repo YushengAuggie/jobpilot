@@ -1,0 +1,27 @@
+# gitleaks config — extends the default ruleset with allowlists for
+# known-safe placeholders in this repo.
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Files and patterns that legitimately contain secret-like text"
+
+paths = [
+    # Lockfile contains SHA-256 package hashes (not secrets, but they look hex-y).
+    '''uv\.lock''',
+
+    # Docs explain how to set up secrets — they reference token *prefixes* only.
+    '''docs/notion\.md''',
+
+    # Tests mock API tokens with literal "dummy"/"secret_..." strings.
+    '''tests/.*''',
+]
+
+regexes = [
+    # Notion-style "secret_..." placeholders in docs (no real value follows).
+    '''secret_\.\.\.''',
+
+    # Generic templated env-var references like ${NOTION_DB_ID}.
+    '''\$\{[A-Z_][A-Z0-9_]*\}''',
+]

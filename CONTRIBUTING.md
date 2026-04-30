@@ -54,6 +54,16 @@ In short:
 - Update tests for any behavioral change
 - For breaking changes (profile schema, Notion DB schema, CLI flags), call it out in the PR description with a migration note
 
+## Personal data safety
+
+jobpilot has three layers of protection so personal data (your `profile.yaml`, resume, API keys) never reaches the public repo:
+
+1. **`.gitignore`** — blocks the obvious files.
+2. **Pre-commit hook** (`scripts/pre-commit`) — refuses the commit if any blocked path is staged, even with `git add -f`. Install once after cloning: `./scripts/install-hooks.sh`.
+3. **CI workflow** (`.github/workflows/secrets-check.yml`) — re-runs the same path check against PR diffs and runs `gitleaks` for API-key/token detection. Fails the build before merge.
+
+If you find a gap in these layers, please open an issue tagged `security`.
+
 ## Reporting issues
 
 When filing a bug, include:
