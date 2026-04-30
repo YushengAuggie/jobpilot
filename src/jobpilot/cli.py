@@ -241,9 +241,101 @@ def tailor(
 
 
 @app.command("apply-pending")
-def apply_pending() -> None:
-    """Pre-fill the application form in your browser for Materials-Ready rows (v1.2)."""
-    console.print("[yellow]apply-pending: not yet implemented (planned for v1.2)[/yellow]")
+def apply_pending(
+    limit: int = typer.Option(0, "--limit", help="Cap rows processed (0 = all)."),
+    output_dir: Path = typer.Option(
+        Path("applications"), "--out", help="Where tailored materials live."
+    ),
+    headless: bool = typer.Option(
+        False, "--headless", help="Run browser headlessly (default: visible so you can submit)."
+    ),
+    verbose: bool = typer.Option(False, "-v", "--verbose"),
+) -> None:
+    """Open each Materials-Ready posting in a browser with the form pre-filled.
+
+    For each row whose Status=Materials-Ready: render resume.md → resume.pdf via
+    pandoc, open the application URL in Chromium, auto-fill the fields we can detect
+    (Greenhouse / Lever / Ashby), wait for you to review and submit, then update
+    Notion Status to Submitted.
+
+    Requires Playwright. First-time setup:
+        uv sync --extra apply
+        uv run playwright install chromium
+    """
+    _setup_logging(verbose)
+    profile = load_profile()
+    sink = NotionSink(token=require_env("NOTION_TOKEN"), database_id=profile.notion.database_id)
+
+    rows = sink.get_rows_by_status("Materials-Ready")
+    if limit > 0:
+        rows = rows[:limit]
+
+    if not rows:
+        console.print(
+            "[yellow]No Materials-Ready rows. Run `jobpilot tailor` first to generate "
+            "materials, or flip Approved rows after tailoring.[/yellow]"
+        )
+        return
+
+    # Lazy import so that running --help / other commands doesn't fail when
+    # the [apply] extra isn't installed.
+    from jobpilot.apply import Applicator, render_resume_pdf
+
+    console.print(f"[green]Opening {len(rows)} Materials-Ready postings...[/green]\n")
+
+    with Applicator(headless=headless) as appl:
+        for row in rows:
+            title = _row_field(row, "Title", "title") or "(untitled)"
+            company = _row_field(row, "Company", "rich_text") or "(unknown)"
+            url = _row_field(row, "URL", "url")
+            if not url:
+                console.print(f"[red]{company} — {title}: no URL on row[/red]")
+                continue
+
+            slug = f"{_slug(company)}-{_slug(title)}"
+            slug_dir = output_dir / slug
+            resume_md = slug_dir / "resume.md"
+            cover_md = slug_dir / "cover_letter.md"
+
+            if not resume_md.exists() or not cover_md.exists():
+                console.print(
+                    f"[red]{company} — {title}: missing materials in {slug_dir}. "
+                    f"Re-run `jobpilot tailor` for this row.[/red]"
+                )
+                continue
+
+            resume_pdf = render_resume_pdf(resume_md)
+            if resume_pdf is None:
+                console.print(
+                    f"[yellow]{company} — {title}: pandoc unavailable; resume upload "
+                    f"will need manual selection. Materials still at {slug_dir}.[/yellow]"
+                )
+
+            console.print(f"\n[cyan]{company}[/cyan] — {title}")
+            console.print(f"  URL: {url}")
+            console.print(f"  Materials: {slug_dir}")
+            try:
+                ats = appl.apply_to(url, profile, resume_pdf, cover_md)
+                console.print(f"  ATS: [green]{ats}[/green] (auto-fill attempted)")
+            except Exception as e:
+                logger.exception("Applicator failed for %s", url)
+                console.print(f"  [red]Auto-fill failed: {type(e).__name__}: {e}[/red]")
+                console.print("  Page should still be open — fill manually if it loaded.")
+
+            response = typer.prompt(
+                "  Submitted? [y]es / [N]o / [s]kip", default="N", show_default=False
+            ).lower().strip()
+            if response.startswith("y"):
+                try:
+                    sink.update_status(row["id"], "Submitted")
+                    console.print("  [green]Status → Submitted[/green]")
+                except Exception:
+                    logger.exception("Notion status update failed")
+                    console.print("  [yellow]Saved locally; Notion update failed[/yellow]")
+            elif response.startswith("s"):
+                console.print("  [dim]Skipped — Status stays Materials-Ready[/dim]")
+            else:
+                console.print("  [dim]Marked as not-yet-submitted — Status stays Materials-Ready[/dim]")
 
 
 if __name__ == "__main__":

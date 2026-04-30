@@ -132,15 +132,30 @@ class NotionSink:
         return inserted
 
     def get_approved_rows(self) -> list[dict[str, Any]]:
-        """Return rows where Status=Approved. Used by the local apply step (v1.2)."""
+        """Return rows where Status=Approved. Used by `jobpilot tailor`."""
+        return self.get_rows_by_status("Approved")
+
+    def get_rows_by_status(self, status: str) -> list[dict[str, Any]]:
+        """Return all rows with the given Status. Paginates through Notion's 100-row limit
+        so backlogs larger than a page aren't silently truncated."""
         if not self.database_id:
             raise RuntimeError("database_id not set")
-        page = self.client.databases.query(
-            database_id=self.database_id,
-            filter={"property": "Status", "select": {"equals": "Approved"}},
-            page_size=100,
-        )
-        return list(page.get("results", []))
+        rows: list[dict[str, Any]] = []
+        cursor: str | None = None
+        while True:
+            kwargs: dict[str, Any] = {
+                "database_id": self.database_id,
+                "filter": {"property": "Status", "select": {"equals": status}},
+                "page_size": 100,
+            }
+            if cursor:
+                kwargs["start_cursor"] = cursor
+            page = self.client.databases.query(**kwargs)
+            rows.extend(page.get("results", []))
+            if not page.get("has_more"):
+                break
+            cursor = page.get("next_cursor")
+        return rows
 
     def update_status(self, page_id: str, status: str) -> None:
         """Update the Status select on a single row."""

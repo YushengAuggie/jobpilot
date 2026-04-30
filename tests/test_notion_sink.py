@@ -109,7 +109,7 @@ def test_upsert_continues_after_failure() -> None:
 def test_get_approved_rows_uses_status_filter() -> None:
     sink = NotionSink(token="dummy", database_id="db_x")
     sink.client = MagicMock()
-    sink.client.databases.query.return_value = {"results": [{"id": "row"}]}
+    sink.client.databases.query.return_value = {"results": [{"id": "row"}], "has_more": False}
 
     rows = sink.get_approved_rows()
 
@@ -117,6 +117,37 @@ def test_get_approved_rows_uses_status_filter() -> None:
     kwargs = sink.client.databases.query.call_args.kwargs
     assert kwargs["filter"]["property"] == "Status"
     assert kwargs["filter"]["select"]["equals"] == "Approved"
+
+
+def test_get_rows_by_status_paginates_through_all_pages() -> None:
+    """Notion caps query results at 100 per page; backlogs larger than that
+    must be followed via has_more / next_cursor or rows are silently dropped."""
+    sink = NotionSink(token="dummy", database_id="db_x")
+    sink.client = MagicMock()
+    sink.client.databases.query.side_effect = [
+        {"results": [{"id": f"page1-{i}"} for i in range(100)], "has_more": True, "next_cursor": "c1"},
+        {"results": [{"id": f"page2-{i}"} for i in range(100)], "has_more": True, "next_cursor": "c2"},
+        {"results": [{"id": "page3-only"}], "has_more": False, "next_cursor": None},
+    ]
+
+    rows = sink.get_rows_by_status("Materials-Ready")
+
+    assert len(rows) == 201
+    assert sink.client.databases.query.call_count == 3
+    # Second call uses the cursor from the first page
+    assert sink.client.databases.query.call_args_list[1].kwargs["start_cursor"] == "c1"
+    assert sink.client.databases.query.call_args_list[2].kwargs["start_cursor"] == "c2"
+
+
+def test_get_rows_by_status_uses_correct_filter() -> None:
+    sink = NotionSink(token="dummy", database_id="db_x")
+    sink.client = MagicMock()
+    sink.client.databases.query.return_value = {"results": [], "has_more": False}
+
+    sink.get_rows_by_status("Submitted")
+
+    kwargs = sink.client.databases.query.call_args.kwargs
+    assert kwargs["filter"]["select"]["equals"] == "Submitted"
 
 
 def test_get_seen_urls_requires_database_id() -> None:
