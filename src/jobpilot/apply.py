@@ -105,14 +105,21 @@ ATS_CONFIGS: dict[str, dict[str, list[str]]] = {
 
 
 def detect_ats(url: str) -> ATSName:
-    """Return the ATS provider for a URL based on hostname."""
+    """Return the ATS provider for a URL based on hostname.
+
+    Matches the hostname exactly or as a strict suffix (preceded by a dot) to
+    avoid classifying attacker-controlled hosts like ``greenhouse.io.evil.com``
+    as a trusted ATS — that would route auto-filled personal data into a
+    phishing page.
+    """
     host = (urlparse(url).hostname or "").lower()
-    if "greenhouse.io" in host:
-        return "greenhouse"
-    if "lever.co" in host:
-        return "lever"
-    if "ashbyhq.com" in host:
-        return "ashby"
+    for domain, ats in (
+        ("greenhouse.io", "greenhouse"),
+        ("lever.co", "lever"),
+        ("ashbyhq.com", "ashby"),
+    ):
+        if host == domain or host.endswith("." + domain):
+            return ats  # type: ignore[return-value]
     return "unknown"
 
 
@@ -154,12 +161,25 @@ def _try_fill(
     return False
 
 
-def _try_upload(page: Page, selectors: list[str], file_path: Path, field_name: str) -> bool:
+def _try_upload(
+    page: Page,
+    selectors: list[str],
+    file_path: Path,
+    field_name: str,
+    *,
+    timeout_ms: int = 2000,
+) -> bool:
+    """Wait for each candidate selector to appear in the DOM, then set files.
+
+    Uses ``state="attached"`` rather than ``state="visible"`` because file
+    inputs on most ATS pages are visually hidden behind a styled label — they
+    still accept set_input_files when only attached. Without this wait, SPA
+    pages that mount the form async would silently miss the upload.
+    """
     for sel in selectors:
         try:
             locator = page.locator(sel).first
-            if locator.count() == 0:
-                continue
+            locator.wait_for(state="attached", timeout=timeout_ms)
             locator.set_input_files(str(file_path))
             logger.info("uploaded %s via %s (%s)", field_name, sel, file_path)
             return True

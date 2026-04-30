@@ -266,14 +266,7 @@ def apply_pending(
     profile = load_profile()
     sink = NotionSink(token=require_env("NOTION_TOKEN"), database_id=profile.notion.database_id)
 
-    rows = [
-        row
-        for row in sink.client.databases.query(
-            database_id=profile.notion.database_id,
-            filter={"property": "Status", "select": {"equals": "Materials-Ready"}},
-            page_size=100,
-        ).get("results", [])
-    ]
+    rows = sink.get_rows_by_status("Materials-Ready")
     if limit > 0:
         rows = rows[:limit]
 

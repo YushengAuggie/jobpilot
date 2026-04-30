@@ -45,6 +45,7 @@ class TestDetectAts:
         [
             ("https://boards.greenhouse.io/anthropic/jobs/12345", "greenhouse"),
             ("https://boards-api.greenhouse.io/anthropic/jobs/12345", "greenhouse"),
+            ("https://greenhouse.io/some-page", "greenhouse"),  # apex domain
             ("https://jobs.lever.co/figma/abc-123", "lever"),
             ("https://api.lever.co/v0/postings/figma", "lever"),
             ("https://jobs.ashbyhq.com/linear/job-id", "ashby"),
@@ -56,6 +57,24 @@ class TestDetectAts:
     )
     def test_detects_provider(self, url: str, expected: str) -> None:
         assert detect_ats(url) == expected
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            # Phishing / look-alike hosts MUST NOT auto-fill personal data.
+            "https://greenhouse.io.evil.com/jobs/1",
+            "https://lever.co.attacker.com/postings/abc",
+            "https://ashbyhq.com.phishing.example/job/x",
+            # Confusable TLDs.
+            "https://lever.com/jobs/1",  # NOT lever.co
+            "https://greenhouse.iorg/jobs/1",  # NOT greenhouse.io
+            # Substring inside path/userinfo, not the host.
+            "https://example.com/redirect?to=greenhouse.io/jobs/1",
+            "https://greenhouse.io@evil.com/jobs/1",
+        ],
+    )
+    def test_phishing_hosts_classified_as_unknown(self, url: str) -> None:
+        assert detect_ats(url) == "unknown"
 
 
 class TestRenderResumePdf:
@@ -134,22 +153,40 @@ class TestTryFill:
 
 
 class TestTryUpload:
-    def test_uploads_when_selector_matches(self, tmp_path: Path) -> None:
+    def test_uploads_when_selector_attached(self, tmp_path: Path) -> None:
         page = MagicMock()
         loc = MagicMock()
-        loc.count.return_value = 1
+        # wait_for succeeds (returns None like real Playwright)
+        loc.wait_for.return_value = None
         page.locator.return_value.first = loc
 
         f = tmp_path / "r.pdf"
         f.write_bytes(b"x")
 
         assert _try_upload(page, ["input[type='file']"], f, "resume") is True
+        loc.wait_for.assert_called_once()
         loc.set_input_files.assert_called_once_with(str(f))
 
-    def test_skips_when_count_is_zero(self, tmp_path: Path) -> None:
+    def test_waits_for_attached_state_not_visible(self, tmp_path: Path) -> None:
+        """File inputs are typically hidden behind styled labels; wait for attached."""
         page = MagicMock()
         loc = MagicMock()
-        loc.count.return_value = 0
+        loc.wait_for.return_value = None
+        page.locator.return_value.first = loc
+
+        f = tmp_path / "r.pdf"
+        f.write_bytes(b"x")
+
+        _try_upload(page, ["input[type='file']"], f, "resume")
+
+        kwargs = loc.wait_for.call_args.kwargs
+        assert kwargs["state"] == "attached"
+
+    def test_skips_when_wait_times_out(self, tmp_path: Path) -> None:
+        """If the element never attaches (SPA never renders it), move on."""
+        page = MagicMock()
+        loc = MagicMock()
+        loc.wait_for.side_effect = Exception("timeout")
         page.locator.return_value.first = loc
 
         f = tmp_path / "r.pdf"
@@ -157,6 +194,20 @@ class TestTryUpload:
 
         assert _try_upload(page, ["input[type='file']"], f, "resume") is False
         loc.set_input_files.assert_not_called()
+
+    def test_falls_through_to_next_selector_on_failure(self, tmp_path: Path) -> None:
+        page = MagicMock()
+        loc1 = MagicMock()
+        loc1.wait_for.side_effect = Exception("not attached")
+        loc2 = MagicMock()
+        loc2.wait_for.return_value = None
+        page.locator.side_effect = [MagicMock(first=loc1), MagicMock(first=loc2)]
+
+        f = tmp_path / "r.pdf"
+        f.write_bytes(b"x")
+
+        assert _try_upload(page, ["sel-1", "sel-2"], f, "resume") is True
+        loc2.set_input_files.assert_called_once()
 
 
 class TestFillForm:
