@@ -6,6 +6,13 @@ on:
     - cron: '0 15 * * *'
   workflow_dispatch:  # allow manual trigger from the Actions tab
 
+# A hung run from yesterday must NOT overlap with today's. Two concurrent runs
+# would each compute their seen-URL set from a stale Notion snapshot and could
+# double-write rows.
+concurrency:
+  group: jobpilot-daily
+  cancel-in-progress: false
+
 jobs:
   run:
     runs-on: ubuntu-latest

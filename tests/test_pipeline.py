@@ -193,6 +193,27 @@ def test_skip_scoring_does_not_construct_notion_sink(
     assert summary.scored == 1
 
 
+def test_dealbreaker_pre_filter_runs_before_scoring(fake_source) -> None:
+    """An attacker-planted 'crypto' comment must be filtered BEFORE Claude
+    is called — otherwise the user pays for scoring obviously-rejected rows."""
+    profile = _profile(dealbreakers=["crypto"])
+    fake_source.list_jobs.return_value = [
+        _posting("https://a/1", jd_text="Building crypto exchange infrastructure"),
+        _posting("https://b/2", jd_text="Distributed systems for fintech"),
+    ]
+    sink = MagicMock()
+    sink.get_seen_urls.return_value = set()
+    sink.upsert_postings.return_value = 1
+    scorer = MagicMock()
+    scorer.score.return_value = Score(value=8, reasons=["good"])
+
+    summary = run_daily(profile, sources=["fake"], sink=sink, scorer=scorer)
+
+    # Only the non-crypto posting should reach the scorer
+    assert scorer.score.call_count == 1
+    assert summary.scored == 1
+
+
 def test_dry_run_without_skip_scoring_still_avoids_sink_when_provided(fake_source) -> None:
     """dry_run alone (with scoring) shouldn't write to Notion either, but get_seen_urls
     is still skipped — the dedup signal is degraded but the run completes."""

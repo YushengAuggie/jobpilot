@@ -19,31 +19,62 @@ Manual job hunting at scale is brutal. Existing tools either spam-apply (which d
 
 ## Quickstart
 
-You'll need: a Notion workspace, an Anthropic API key, and a few minutes.
+The first 5 minutes have no API keys involved — you can verify sources work before paying for anything.
+
+### 1. Install
 
 ```bash
 git clone https://github.com/<you>/jobpilot && cd jobpilot
-uv sync
 
-# Configure
-cp profile.example.yaml profile.yaml          # edit: target roles, salary, stages, ATS slugs
-cp .env.example .env                           # add ANTHROPIC_API_KEY + NOTION_TOKEN
+# Pick one. uv is faster; pip works too.
+uv sync                                        # https://docs.astral.sh/uv/getting-started/installation/
+# OR
+pip install -e .
+```
 
-# Set up Notion
-# 1. Create an integration at https://www.notion.so/my-integrations — copy the token to NOTION_TOKEN
-# 2. Create a Notion page where the database will live; share it with your integration
-# 3. Run:
-uv run python -m jobpilot init-notion --parent-page-id <your-page-id>
-# Add the printed NOTION_DB_ID to .env
+### 2. Smoke-test sources (no keys yet)
 
-# Preview (no Notion writes)
-uv run python -m jobpilot run-daily --dry-run --limit 5
+```bash
+cp profile.example.yaml profile.yaml          # edit: target_roles, salary, ats_boards
+uv run python -m jobpilot run-daily --no-score --limit 3 --source hn
+```
 
-# Real run
+You should see real Hacker News "Who's Hiring" postings printed to your terminal. If this works, sources are reachable. No API calls. No Notion writes. **If it fails here**, the README's setup steps don't apply — open an issue.
+
+### 3. Add API keys
+
+```bash
+cp .env.example .env
+# Edit .env and paste:
+#   ANTHROPIC_API_KEY=sk-ant-... (from https://console.anthropic.com/)
+#   NOTION_TOKEN=secret_...      (from https://www.notion.so/my-integrations)
+```
+
+For the Notion integration, see [`docs/notion.md`](docs/notion.md) — three steps: create the integration, create a parent page in Notion, share that page with the integration via its `•••` menu → Connections.
+
+### 4. Initialize the Notion database
+
+```bash
+uv run python -m jobpilot init-notion --parent-page-id <32-char-page-id-from-the-Notion-URL>
+```
+
+Copy the printed `NOTION_DB_ID` into `.env`.
+
+### 5. Preview the full pipeline (real scoring, no Notion writes)
+
+```bash
+uv run python -m jobpilot run-daily --dry-run --limit 3
+```
+
+This costs a few cents in Anthropic API. You'll see the same postings as step 2, now with actual scores against your profile. Sanity-check that the top score makes sense for what you'd actually want.
+
+### 6. Real run
+
+```bash
 uv run python -m jobpilot run-daily
 ```
 
-Open Notion. You'll see a ranked shortlist.
+Open the Notion page. You'll see a ranked shortlist.
 
 ## Configuration
 
@@ -86,13 +117,17 @@ Open Notion. You'll see a ranked shortlist.
 
 A workflow at `.github/workflows/daily.yml` runs the pipeline every day at 15:00 UTC (8am PT). To enable:
 
-1. Push the repo to GitHub
-2. Add four secrets under Settings → Secrets → Actions:
+1. **Get local `run-daily` working first.** Actions runs the same code with secrets injected; debugging a misconfigured Notion integration through Actions logs (with secrets masked) is brutal.
+2. Push the repo to GitHub.
+3. Add four secrets under Settings → Secrets → Actions:
    - `ANTHROPIC_API_KEY`
    - `NOTION_TOKEN`
    - `NOTION_DB_ID`
-   - `PROFILE_YAML` — paste the **entire contents** of your `profile.yaml`
-3. Trigger once manually: `gh workflow run daily.yml`
+   - `PROFILE_YAML` — paste the **entire contents** of your `profile.yaml`. The CLI is more reliable than the web paste box for multi-line content:
+     ```bash
+     gh secret set PROFILE_YAML < profile.yaml
+     ```
+4. Trigger once manually: `gh workflow run daily.yml`.
 
 Since `profile.yaml` is gitignored, the workflow reconstructs it from the `PROFILE_YAML` secret at runtime. Your repo can be public; nothing personal is committed.
 
@@ -129,8 +164,10 @@ Once `jobpilot tailor` produces materials and you flip the row to `Materials-Rea
 uv sync --extra apply                  # one-time: install Playwright
 uv run playwright install chromium     # one-time: download browser (~300MB)
 
-# Optional but recommended for resume upload:
-brew install pandoc                    # renders resume.md → resume.pdf
+# Recommended for resume upload (without it, you'll have to upload manually):
+brew install pandoc                    # macOS
+# apt install pandoc                   # Debian/Ubuntu
+# https://pandoc.org/installing.html   # everywhere else
 
 uv run python -m jobpilot apply-pending
 ```
@@ -138,6 +175,8 @@ uv run python -m jobpilot apply-pending
 For each row, jobpilot opens the application URL in a visible Chromium window, detects the ATS (Greenhouse / Lever / Ashby), and fills name, email, phone, resume upload, and cover letter where it can. You review what got filled, fix anything that didn't, and click submit. The terminal then asks "Submitted? y/N/skip" and updates Notion accordingly.
 
 Auto-fill is best-effort — selectors drift. If a field doesn't fill, the page is still open; just type it in. Unknown ATS providers (LinkedIn, Workday, etc.) load without auto-fill so you can apply manually.
+
+**Privacy note:** Tailoring sends your base resume + the JD to Anthropic. Scoring sends only the JD. If your resume contains information you don't want sent, redact it from the file `profile.yaml`'s `resume_path` points at, or skip `tailor` and write cover letters manually.
 
 ## Contributing
 
