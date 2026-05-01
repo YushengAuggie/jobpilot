@@ -62,20 +62,32 @@ class TestGreenhouse:
         assert postings[0].location == "Remote"
 
     @respx.mock
-    def test_respects_limit(self) -> None:
-        respx.get("https://boards-api.greenhouse.io/v1/boards/x/jobs?content=true").mock(
-            return_value=httpx.Response(
-                200,
-                json={
-                    "jobs": [
-                        {"title": f"Job {i}", "location": {"name": "X"}, "content": "x", "absolute_url": f"u/{i}"}
-                        for i in range(10)
-                    ]
-                },
+    def test_respects_limit_per_company(self) -> None:
+        """--limit caps each company independently, not the cumulative source.
+        Two companies with limit=3 means up to 6 total postings (3 from each)."""
+        for slug in ("x", "y"):
+            respx.get(
+                f"https://boards-api.greenhouse.io/v1/boards/{slug}/jobs?content=true"
+            ).mock(
+                return_value=httpx.Response(
+                    200,
+                    json={
+                        "jobs": [
+                            {
+                                "title": f"{slug} Job {i}",
+                                "location": {"name": "X"},
+                                "content": "x",
+                                "absolute_url": f"u/{slug}/{i}",
+                            }
+                            for i in range(10)
+                        ]
+                    },
+                )
             )
-        )
-        postings = GreenhouseSource().list_jobs(_profile(greenhouse=["x"]), limit=3)
-        assert len(postings) == 3
+        postings = GreenhouseSource().list_jobs(_profile(greenhouse=["x", "y"]), limit=3)
+        assert len(postings) == 6
+        assert sum(1 for p in postings if p.company == "x") == 3
+        assert sum(1 for p in postings if p.company == "y") == 3
 
     @respx.mock
     def test_handles_404_gracefully(self) -> None:

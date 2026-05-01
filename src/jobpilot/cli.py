@@ -8,15 +8,27 @@ from pathlib import Path
 from typing import Any
 
 import typer
+from dotenv import load_dotenv
 from rich.console import Console
 from rich.table import Table
 
-from jobpilot._jd_fetch import fetch_jd_text
-from jobpilot.config import load_profile, require_env
-from jobpilot.models import JobPosting
-from jobpilot.notion_sink import NotionSink
-from jobpilot.pipeline import run_daily as run_pipeline
-from jobpilot.tailor import Tailorer
+# Load .env at import time so every command sees env vars regardless of whether
+# it calls load_profile() (which also loads .env, but only after the command
+# runs). Without this, init-notion would require the user to `export
+# NOTION_TOKEN=...` manually even though .env already has it.
+#
+# Use cwd explicitly: when the package is pip-installed, find_dotenv() (the
+# default) searches from cli.py's location inside site-packages, not from where
+# the user invoked the command. The user's .env lives next to their profile.yaml
+# in their working directory.
+load_dotenv(Path.cwd() / ".env")
+
+from jobpilot._jd_fetch import fetch_jd_text  # noqa: E402
+from jobpilot.config import load_profile, require_env  # noqa: E402
+from jobpilot.models import JobPosting  # noqa: E402
+from jobpilot.notion_sink import NotionSink  # noqa: E402
+from jobpilot.pipeline import run_daily as run_pipeline  # noqa: E402
+from jobpilot.tailor import Tailorer  # noqa: E402
 
 app = typer.Typer(help="Daily AI-curated job shortlist + tailored applications.")
 console = Console()

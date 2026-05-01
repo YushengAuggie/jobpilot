@@ -7,7 +7,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from jobpilot.models import JobPosting, Profile, Stage
-from jobpilot.score import ScoreOutput, Scorer, _format_posting, _format_profile
+from jobpilot.score import Scorer, _format_posting, _format_profile
 
 
 def _profile(**overrides: object) -> Profile:
@@ -60,29 +60,67 @@ class TestFormatting:
         assert text.count("x") == 6000
 
 
+def _mock_response(text: str, stop_reason: str = "end_turn") -> MagicMock:
+    block = MagicMock()
+    block.type = "text"
+    block.text = text
+    response = MagicMock()
+    response.stop_reason = stop_reason
+    response.content = [block]
+    return response
+
+
 @pytest.mark.unit
 class TestScorer:
     def test_score_extracts_value_and_reasons(self) -> None:
         client = MagicMock()
-        response = MagicMock()
-        response.stop_reason = "end_turn"
-        response.parsed_output = ScoreOutput(
-            score=8.5,
-            reasons=["matches distributed-systems strength", "Series-C — outside seed-B target"],
+        client.messages.create.return_value = _mock_response(
+            '{"score": 8.5, "reasons": ["matches distributed-systems", "Series-C outside target"]}'
         )
-        client.messages.parse.return_value = response
 
         score = Scorer(client=client).score(_profile(), _posting())
 
         assert score.value == 8.5
         assert len(score.reasons) == 2
 
+    def test_strips_markdown_code_fences(self) -> None:
+        """Some Anthropic-compatible proxies (Poe, etc.) return JSON wrapped in
+        ```json fences. Score must tolerate that — it's the difference between
+        works-on-anthropic-only and works-on-any-proxy."""
+        client = MagicMock()
+        client.messages.create.return_value = _mock_response(
+            '```json\n{"score": 7.0, "reasons": ["fence test"]}\n```'
+        )
+
+        score = Scorer(client=client).score(_profile(), _posting())
+
+        assert score.value == 7.0
+        assert score.reasons == ["fence test"]
+
+    def test_strips_bare_fence_without_language(self) -> None:
+        client = MagicMock()
+        client.messages.create.return_value = _mock_response(
+            '```\n{"score": 6.0, "reasons": ["bare fence"]}\n```'
+        )
+
+        score = Scorer(client=client).score(_profile(), _posting())
+
+        assert score.value == 6.0
+
+    def test_unparseable_output_returns_zero_with_warning(self) -> None:
+        client = MagicMock()
+        client.messages.create.return_value = _mock_response(
+            "I think this is a great match! Score: 9 out of 10."
+        )
+
+        score = Scorer(client=client).score(_profile(), _posting())
+
+        assert score.value == 0
+        assert "unparseable" in score.reasons[0].lower()
+
     def test_refusal_returns_zero_with_reason(self) -> None:
         client = MagicMock()
-        response = MagicMock()
-        response.stop_reason = "refusal"
-        response.parsed_output = None
-        client.messages.parse.return_value = response
+        client.messages.create.return_value = _mock_response("", stop_reason="refusal")
 
         score = Scorer(client=client).score(_profile(), _posting())
 
@@ -92,14 +130,13 @@ class TestScorer:
     def test_passes_cache_control_on_rubric_and_profile(self) -> None:
         """Caching is the whole point of this module — verify the breakpoints are wired up."""
         client = MagicMock()
-        response = MagicMock()
-        response.stop_reason = "end_turn"
-        response.parsed_output = ScoreOutput(score=5, reasons=["mid"])
-        client.messages.parse.return_value = response
+        client.messages.create.return_value = _mock_response(
+            '{"score": 5.0, "reasons": ["mid"]}'
+        )
 
         Scorer(client=client).score(_profile(), _posting())
 
-        kwargs = client.messages.parse.call_args.kwargs
+        kwargs = client.messages.create.call_args.kwargs
         # System: cache_control on the rubric text block
         assert kwargs["system"][0]["cache_control"] == {"type": "ephemeral"}
         # First user content block (profile) is cached; second (JD) is not
@@ -109,12 +146,11 @@ class TestScorer:
 
     def test_uses_pinned_model(self) -> None:
         client = MagicMock()
-        response = MagicMock()
-        response.stop_reason = "end_turn"
-        response.parsed_output = ScoreOutput(score=5, reasons=["mid"])
-        client.messages.parse.return_value = response
+        client.messages.create.return_value = _mock_response(
+            '{"score": 5.0, "reasons": ["mid"]}'
+        )
 
         Scorer(client=client).score(_profile(), _posting())
 
         # Pinned to a specific model — drift is a deliberate change, not silent
-        assert client.messages.parse.call_args.kwargs["model"] == "claude-sonnet-4-6"
+        assert client.messages.create.call_args.kwargs["model"] == "claude-sonnet-4-6"

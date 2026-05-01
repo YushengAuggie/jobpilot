@@ -72,6 +72,7 @@ class GreenhouseSource:
         postings: list[JobPosting] = []
         with httpx.Client(timeout=self.timeout) as client:
             for slug in profile.ats_boards.greenhouse:
+                count = 0
                 for job in _fetch_company_jobs(client, GREENHOUSE_URL, slug):
                     title = job.get("title", "")
                     if not title:
@@ -87,8 +88,9 @@ class GreenhouseSource:
                             location=location,
                         )
                     )
-                    if limit and len(postings) >= limit:
-                        return postings
+                    count += 1
+                    if limit and count >= limit:
+                        break
         return postings
 
 
@@ -110,6 +112,7 @@ class LeverSource:
         postings: list[JobPosting] = []
         with httpx.Client(timeout=self.timeout) as client:
             for slug in profile.ats_boards.lever:
+                count = 0
                 for job in _fetch_company_jobs(client, LEVER_URL, slug):
                     title = job.get("text", "")
                     if not title:
@@ -129,8 +132,9 @@ class LeverSource:
                             location=location,
                         )
                     )
-                    if limit and len(postings) >= limit:
-                        return postings
+                    count += 1
+                    if limit and count >= limit:
+                        break
         return postings
 
 
@@ -152,6 +156,7 @@ class AshbySource:
         postings: list[JobPosting] = []
         with httpx.Client(timeout=self.timeout) as client:
             for slug in profile.ats_boards.ashby:
+                count = 0
                 for job in _fetch_company_jobs(client, ASHBY_URL, slug):
                     title = job.get("title", "")
                     if not title:
@@ -169,8 +174,9 @@ class AshbySource:
                             location=job.get("location"),
                         )
                     )
-                    if limit and len(postings) >= limit:
-                        return postings
+                    count += 1
+                    if limit and count >= limit:
+                        break
         return postings
 
 
