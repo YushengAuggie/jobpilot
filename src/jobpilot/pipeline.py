@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass
 
 from jobpilot.config import require_env
-from jobpilot.filters import canonical_url, passes_filters
+from jobpilot.filters import canonical_url, has_dealbreaker, passes_filters
 from jobpilot.models import JobPosting, Profile, ScoredPosting
 from jobpilot.notion_sink import NotionSink
 from jobpilot.score import Scorer
@@ -97,6 +97,20 @@ def run_daily(
             continue
         seen_in_run.add(url)
         new_postings.append(p)
+
+    # Cheap pre-filter: drop dealbreaker keyword hits BEFORE paying for Claude
+    # scoring. An attacker who plants "crypto" in HN comments could otherwise
+    # burn API spend at our expense. Skip when scoring is skipped — placeholder
+    # scores aren't meaningful and the user is just inspecting source output.
+    if not skip_scoring and profile.dealbreakers:
+        before = len(new_postings)
+        new_postings = [
+            p for p in new_postings
+            if not has_dealbreaker(p.jd_text, profile.dealbreakers)
+        ]
+        dropped = before - len(new_postings)
+        if dropped:
+            logger.info("pre-filtered %d posting(s) on dealbreaker match", dropped)
 
     # Score (or stub when skip_scoring is set)
     scored: list[ScoredPosting] = []

@@ -60,14 +60,6 @@ class GreenhouseSource:
     def __init__(self, timeout: float = 10.0) -> None:
         self.timeout = timeout
 
-    def health(self) -> tuple[bool, str]:
-        try:
-            r = httpx.get(GREENHOUSE_URL.format(slug="anthropic"), timeout=self.timeout)
-            r.raise_for_status()
-            return True, "ok"
-        except Exception as e:
-            return False, f"{type(e).__name__}: {e}"
-
     def list_jobs(self, profile: Profile, limit: int = 0) -> list[JobPosting]:
         postings: list[JobPosting] = []
         with httpx.Client(timeout=self.timeout) as client:
@@ -99,14 +91,6 @@ class LeverSource:
 
     def __init__(self, timeout: float = 10.0) -> None:
         self.timeout = timeout
-
-    def health(self) -> tuple[bool, str]:
-        try:
-            r = httpx.get(LEVER_URL.format(slug="netflix"), timeout=self.timeout)
-            r.raise_for_status()
-            return True, "ok"
-        except Exception as e:
-            return False, f"{type(e).__name__}: {e}"
 
     def list_jobs(self, profile: Profile, limit: int = 0) -> list[JobPosting]:
         postings: list[JobPosting] = []
@@ -143,14 +127,6 @@ class AshbySource:
 
     def __init__(self, timeout: float = 10.0) -> None:
         self.timeout = timeout
-
-    def health(self) -> tuple[bool, str]:
-        try:
-            r = httpx.get(ASHBY_URL.format(slug="ashby"), timeout=self.timeout)
-            r.raise_for_status()
-            return True, "ok"
-        except Exception as e:
-            return False, f"{type(e).__name__}: {e}"
 
     def list_jobs(self, profile: Profile, limit: int = 0) -> list[JobPosting]:
         postings: list[JobPosting] = []

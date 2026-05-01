@@ -154,3 +154,41 @@ class TestScorer:
 
         # Pinned to a specific model — drift is a deliberate change, not silent
         assert client.messages.create.call_args.kwargs["model"] == "claude-sonnet-4-6"
+
+    def test_jd_wrapped_in_untrusted_tags(self) -> None:
+        """Prompt-injection guard: the JD must be wrapped so the rubric can
+        reference it as data, never as instructions."""
+        client = MagicMock()
+        client.messages.create.return_value = _mock_response(
+            '{"score": 5.0, "reasons": ["mid"]}'
+        )
+
+        Scorer(client=client).score(_profile(), _posting())
+
+        user_content = client.messages.create.call_args.kwargs["messages"][0]["content"]
+        # Second block is the JD — must be wrapped
+        jd_text = user_content[1]["text"]
+        assert "<untrusted_jd>" in jd_text
+        assert "</untrusted_jd>" in jd_text
+
+    def test_reasons_get_url_stripped_and_length_capped(self) -> None:
+        """A malicious JD might coerce Claude into emitting URLs/emails into reasons.
+        Score must scrub them before persisting to Notion."""
+        client = MagicMock()
+        client.messages.create.return_value = _mock_response(
+            '{"score": 7.0, "reasons": ['
+            '"good fit, click https://evil.example/claim",'
+            '"contact alice@evil.example for details",'
+            '"' + ("x" * 500) + '"'
+            "]}"
+        )
+
+        score = Scorer(client=client).score(_profile(), _posting())
+
+        # URLs replaced with [link]
+        assert "https://" not in score.reasons[0]
+        assert "[link]" in score.reasons[0]
+        # Emails too
+        assert "alice@evil.example" not in score.reasons[1]
+        # Long reasons capped
+        assert len(score.reasons[2]) <= 240
