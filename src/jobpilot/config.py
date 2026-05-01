@@ -28,7 +28,11 @@ def _resolve_env_vars(value: object) -> object:
             var = match.group(1)
             default = match.group(2)
             resolved = os.environ.get(var)
-            if resolved is None:
+            # Bash's ${VAR:-default} treats unset *or empty* as missing. Match that
+            # — otherwise NOTION_DB_ID= in .env (forgot to paste the value) would
+            # resolve to "" and quietly drive Notion calls with an invalid ID.
+            is_empty = resolved is None or resolved == ""
+            if is_empty:
                 if default is not None:
                     return default
                 raise ValueError(

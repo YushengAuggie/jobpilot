@@ -16,7 +16,12 @@ from rich.table import Table
 # it calls load_profile() (which also loads .env, but only after the command
 # runs). Without this, init-notion would require the user to `export
 # NOTION_TOKEN=...` manually even though .env already has it.
-load_dotenv()
+#
+# Use cwd explicitly: when the package is pip-installed, find_dotenv() (the
+# default) searches from cli.py's location inside site-packages, not from where
+# the user invoked the command. The user's .env lives next to their profile.yaml
+# in their working directory.
+load_dotenv(Path.cwd() / ".env")
 
 from jobpilot._jd_fetch import fetch_jd_text  # noqa: E402
 from jobpilot.config import load_profile, require_env  # noqa: E402

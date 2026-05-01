@@ -116,3 +116,18 @@ def test_no_default_still_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.delenv("UNSET_FOR_TEST", raising=False)
     with pytest.raises(ValueError, match="UNSET_FOR_TEST"):
         _resolve_env_vars("${UNSET_FOR_TEST}")
+
+
+def test_empty_string_var_falls_back_to_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Bash semantics: ${VAR:-default} treats empty string as missing too.
+    Common case: user has NOTION_DB_ID= in .env (forgot the value)."""
+    monkeypatch.setenv("EMPTY_FOR_TEST", "")
+    assert _resolve_env_vars("${EMPTY_FOR_TEST:-fallback}") == "fallback"
+
+
+def test_empty_string_with_no_default_still_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """${VAR} (no default) with empty value should be treated as missing too —
+    we want loud failure on misconfigured env, not silent empty propagation."""
+    monkeypatch.setenv("EMPTY_FOR_TEST", "")
+    with pytest.raises(ValueError, match="EMPTY_FOR_TEST"):
+        _resolve_env_vars("${EMPTY_FOR_TEST}")

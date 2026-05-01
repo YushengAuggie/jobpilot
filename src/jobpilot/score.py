@@ -7,6 +7,7 @@ cached together. Per-posting calls only pay full price for the JD itself.
 from __future__ import annotations
 
 import logging
+import re
 
 import anthropic
 from pydantic import BaseModel, Field
@@ -15,6 +16,17 @@ from jobpilot.config import require_env
 from jobpilot.models import JobPosting, Profile, Score
 
 logger = logging.getLogger(__name__)
+
+# Some Anthropic-compatible proxies (Poe, Bedrock-via-LiteLLM, etc.) don't honor
+# output_config.format and let Claude wrap JSON in markdown fences. Strip them
+# before parsing — works for native Anthropic too, since native rarely fences
+# with structured outputs but a stray fence is harmless to remove.
+_FENCE_PATTERN = re.compile(r"^\s*```(?:json)?\s*\n?|\n?```\s*$", re.IGNORECASE)
+
+
+def _extract_json(text: str) -> str:
+    """Strip markdown code fences if present. Returns the inner JSON string."""
+    return _FENCE_PATTERN.sub("", text.strip()).strip()
 
 SCORING_MODEL = "claude-sonnet-4-6"
 MAX_RESPONSE_TOKENS = 400
@@ -261,7 +273,7 @@ class Scorer:
 
     def score(self, profile: Profile, posting: JobPosting) -> Score:
         try:
-            response = self.client.messages.parse(
+            response = self.client.messages.create(
                 model=self.model,
                 max_tokens=MAX_RESPONSE_TOKENS,
                 temperature=0,
@@ -285,7 +297,6 @@ class Scorer:
                         ],
                     }
                 ],
-                output_format=ScoreOutput,
             )
         except anthropic.APIError:
             logger.exception("Claude scoring failed for %s", posting.url)
@@ -295,5 +306,16 @@ class Scorer:
             logger.warning("Claude refused to score %s; recording as 0", posting.url)
             return Score(value=0, reasons=["model declined to score this posting"])
 
-        parsed: ScoreOutput = response.parsed_output
+        text = "".join(block.text for block in response.content if block.type == "text")
+        try:
+            parsed = ScoreOutput.model_validate_json(_extract_json(text))
+        except Exception as e:
+            logger.warning(
+                "Could not parse score JSON for %s (raw=%r): %s",
+                posting.url,
+                text[:200],
+                e,
+            )
+            return Score(value=0, reasons=[f"unparseable scoring output: {type(e).__name__}"])
+
         return Score(value=parsed.score, reasons=parsed.reasons)
