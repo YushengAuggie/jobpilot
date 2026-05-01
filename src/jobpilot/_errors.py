@@ -80,22 +80,19 @@ def _hint_for(exc: Exception) -> str | None:
     return None
 
 
-def friendly_errors(verbose_var: str = "-v") -> Callable[[F], F]:
+def friendly_errors() -> Callable[[F], F]:
     """Decorator: render known exceptions as friendly one-liners and exit cleanly.
 
-    Pass `-v` (or `--verbose`) on the command to fall back to a full traceback.
-    The decorator inspects sys.argv as a last resort — Typer's `verbose` flag
-    is plumbed through commands explicitly, but we also want this safety net.
+    Pass `verbose=True` (Typer plumbs `-v` / `--verbose` through to the kwarg) to
+    fall back to a full traceback. We deliberately don't sniff sys.argv — under
+    pytest `-v`, that would re-raise every test exception and defeat the whole
+    decorator.
     """
 
     def decorator(fn: F) -> F:
         @wraps(fn)
         def wrapper(*args: Any, **kwargs: Any) -> Any:
-            import sys
-
-            verbose = kwargs.get("verbose", False) or any(
-                a in sys.argv for a in ("-v", "--verbose")
-            )
+            verbose = bool(kwargs.get("verbose", False))
             try:
                 return fn(*args, **kwargs)
             except (typer.Exit, KeyboardInterrupt):
