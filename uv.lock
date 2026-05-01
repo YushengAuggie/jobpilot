@@ -342,7 +342,7 @@ requires-dist = [
     { name = "freezegun", marker = "extra == 'dev'", specifier = ">=1.5.0" },
     { name = "httpx", specifier = ">=0.27.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10.0" },
-    { name = "notion-client", specifier = ">=2.2.1" },
+    { name = "notion-client", specifier = ">=2.2.1,<2.5" },
     { name = "playwright", marker = "extra == 'apply'", specifier = ">=1.40.0" },
     { name = "playwright", marker = "extra == 'dev'", specifier = ">=1.40.0" },
     { name = "pydantic", specifier = ">=2.7.0" },
@@ -494,14 +494,14 @@ wheels = [
 
 [[package]]
 name = "notion-client"
-version = "3.0.0"
+version = "2.4.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "httpx" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a5/39/60afcbc0148c3dafaaefe851ae3f058077db49d66288dfb218a11a57b997/notion_client-3.0.0.tar.gz", hash = "sha256:05c4d2b4fa3491dc0de21c9c826277202ea8b8714077ee7f51a6e1a09ab23d0f", size = 31357, upload-time = "2026-02-16T11:15:48.024Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/6d/49/d6a8ac78256113ff70aa24e2e1c1f5efc86034ad6a2e6415f1d56a3035aa/notion_client-2.4.0.tar.gz", hash = "sha256:e7ff32f733fdbe0f18a37f5d98ff665681e5b3c4dcf2faa6e602bb1b16a3b15d", size = 18655, upload-time = "2025-06-17T10:59:20.868Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/aa/ce/6b03f9aedd2edfcc28e23ced5c2582d543f6ddbb2be5c570533f02890b27/notion_client-3.0.0-py2.py3-none-any.whl", hash = "sha256:177fc3d2ace7e8ef69cf96f46269e8a66071c2c7c526194bf06ce7925853e759", size = 18746, upload-time = "2026-02-16T11:15:46.602Z" },
+    { url = "https://files.pythonhosted.org/packages/84/3c/27fa2772e0c6b64e732ba7549559d0eaf90808508a091474568f23d72900/notion_client-2.4.0-py2.py3-none-any.whl", hash = "sha256:89f47c0a5eedc08f1170c04e85f422091ce3e095f20b69a3877152e875f0094f", size = 13835, upload-time = "2025-06-17T10:59:19.993Z" },
 ]
 
 [[package]]
