@@ -52,9 +52,11 @@ ats_boards:
   ashby:
     - linear
 
-# Notion DB ID (resolved from .env). Run `jobpilot init-notion` to create one.
+# Notion DB ID (resolved from .env). Run `jobpilot init-notion` to create one,
+# then paste the returned ID into .env. Until then, the placeholder default lets
+# every other command load this file without erroring.
 notion:
-  database_id: ${NOTION_DB_ID}
+  database_id: ${NOTION_DB_ID:-not-yet-configured}
 
 # Postings below this score are dropped. 0-10.
 score_threshold: 6

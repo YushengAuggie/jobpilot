@@ -51,14 +51,19 @@ def run_daily(
     if skip_scoring:
         dry_run = True  # never write unscored postings to Notion
 
-    sink = sink or NotionSink(
-        token=require_env("NOTION_TOKEN"),
-        database_id=profile.notion.database_id,
-    )
+    # Defer NotionSink construction. With dry_run=True we never call get_seen_urls
+    # or upsert_postings, so requiring NOTION_TOKEN at that point would force the
+    # user to set up Notion just to smoke-test sources. Build only when needed.
+    needs_notion = not dry_run
+    if sink is None and needs_notion:
+        sink = NotionSink(
+            token=require_env("NOTION_TOKEN"),
+            database_id=profile.notion.database_id,
+        )
     scorer = scorer or (None if skip_scoring else Scorer())
 
     seen_urls: set[str] = set()
-    if not dry_run:
+    if not dry_run and sink is not None:
         try:
             seen_urls = {canonical_url(u) for u in sink.get_seen_urls()}
         except Exception:
@@ -125,7 +130,7 @@ def run_daily(
     kept = kept[: profile.daily_limit]
 
     upserted = 0
-    if not dry_run and kept:
+    if not dry_run and kept and sink is not None:
         upserted = sink.upsert_postings(kept)
 
     return RunSummary(

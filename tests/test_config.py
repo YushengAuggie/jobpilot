@@ -91,3 +91,28 @@ def test_load_profile_resolves_env(tmp_path: Path, monkeypatch: pytest.MonkeyPat
 def test_load_profile_missing_file_raises(tmp_path: Path) -> None:
     with pytest.raises(FileNotFoundError):
         load_profile(tmp_path / "nope.yaml", env_path=tmp_path / ".env")
+
+
+def test_default_value_syntax_when_var_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    """${VAR:-default} resolves to `default` when the env var is missing — bash-compatible."""
+    monkeypatch.delenv("UNSET_FOR_TEST", raising=False)
+    assert _resolve_env_vars("${UNSET_FOR_TEST:-fallback}") == "fallback"
+
+
+def test_default_value_syntax_when_var_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    """${VAR:-default} prefers the env var value when it's set."""
+    monkeypatch.setenv("SET_FOR_TEST", "actual")
+    assert _resolve_env_vars("${SET_FOR_TEST:-fallback}") == "actual"
+
+
+def test_default_value_with_empty_default(monkeypatch: pytest.MonkeyPatch) -> None:
+    """${VAR:-} with empty default is valid — resolves to empty string."""
+    monkeypatch.delenv("UNSET_FOR_TEST", raising=False)
+    assert _resolve_env_vars("${UNSET_FOR_TEST:-}") == ""
+
+
+def test_no_default_still_raises(monkeypatch: pytest.MonkeyPatch) -> None:
+    """${VAR} without :- default still raises if unset — protects against typos."""
+    monkeypatch.delenv("UNSET_FOR_TEST", raising=False)
+    with pytest.raises(ValueError, match="UNSET_FOR_TEST"):
+        _resolve_env_vars("${UNSET_FOR_TEST}")

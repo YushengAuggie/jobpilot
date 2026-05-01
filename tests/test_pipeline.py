@@ -172,6 +172,42 @@ def test_skip_scoring_bypasses_scorer_and_filters(fake_source) -> None:
     assert summary.passed_filters == 2  # filters bypassed when skip_scoring
 
 
+def test_skip_scoring_does_not_construct_notion_sink(
+    fake_source, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The whole point of --no-score is verifying sources without paying for Anthropic
+    AND without setting up Notion. If the user has no NOTION_TOKEN, it should still work."""
+    monkeypatch.delenv("NOTION_TOKEN", raising=False)
+    fake_source.list_jobs.return_value = [_posting("https://a/1")]
+
+    # Pass sink=None and scorer=MagicMock — pipeline must not try to build a NotionSink
+    summary = run_daily(
+        _profile(),
+        skip_scoring=True,
+        sources=["fake"],
+        sink=None,
+        scorer=MagicMock(),
+    )
+
+    assert summary.fetched == 1
+    assert summary.scored == 1
+
+
+def test_dry_run_without_skip_scoring_still_avoids_sink_when_provided(fake_source) -> None:
+    """dry_run alone (with scoring) shouldn't write to Notion either, but get_seen_urls
+    is still skipped — the dedup signal is degraded but the run completes."""
+    fake_source.list_jobs.return_value = [_posting("https://a/1")]
+    sink = MagicMock()
+    scorer = MagicMock()
+    scorer.score.return_value = Score(value=8, reasons=["x"])
+
+    summary = run_daily(_profile(), dry_run=True, sources=["fake"], sink=sink, scorer=scorer)
+
+    sink.get_seen_urls.assert_not_called()
+    sink.upsert_postings.assert_not_called()
+    assert summary.scored == 1
+
+
 def test_scoring_failure_skips_posting(fake_source) -> None:
     fake_source.list_jobs.return_value = [_posting("https://a/1"), _posting("https://b/2")]
     sink = MagicMock()

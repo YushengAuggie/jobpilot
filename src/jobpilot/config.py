@@ -11,19 +11,29 @@ from dotenv import load_dotenv
 
 from jobpilot.models import Profile
 
-ENV_VAR_PATTERN = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)\}")
+# Matches ${VAR} or ${VAR:-default}. Default extends to the closing brace.
+ENV_VAR_PATTERN = re.compile(r"\$\{([A-Z_][A-Z0-9_]*)(?::-([^}]*))?\}")
 
 
 def _resolve_env_vars(value: object) -> object:
-    """Replace ${VAR} placeholders with values from os.environ. Recurses into dicts/lists."""
+    """Replace ${VAR} placeholders with values from os.environ. Recurses into dicts/lists.
+
+    Bash-compatible default syntax: ${VAR:-default} resolves to `default` when the
+    env var is unset, instead of raising. ${VAR} (no default) still raises so real
+    config errors aren't silently swallowed.
+    """
     if isinstance(value, str):
 
         def replace(match: re.Match[str]) -> str:
             var = match.group(1)
+            default = match.group(2)
             resolved = os.environ.get(var)
             if resolved is None:
+                if default is not None:
+                    return default
                 raise ValueError(
-                    f"profile.yaml references ${{{var}}} but it is not set in the environment"
+                    f"profile.yaml references ${{{var}}} but it is not set in the environment. "
+                    f"Either set the env var, or use ${{{var}:-default}} to provide a fallback."
                 )
             return resolved
 
