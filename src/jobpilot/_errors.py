@@ -77,6 +77,23 @@ def _hint_for(exc: Exception) -> str | None:
     if "authentication" in msg.lower() or "invalid x-api-key" in msg.lower():
         return "Anthropic rejected ANTHROPIC_API_KEY. Check the key in .env."
 
+    # SSRF guard tripped — the JD URL points to a private host or unsupported scheme
+    if cls == "UnsafeURLError":
+        return (
+            "The URL was refused by the SSRF guard. JD links should be public "
+            "http(s) URLs; private/loopback hosts and schemes like file:// or "
+            "javascript: are blocked. If the URL came from a Notion row, the "
+            "row may have been planted with a malicious link — skip that row."
+        )
+
+    # Response too large — JD page exceeds 5 MB cap
+    if cls == "ResponseTooLargeError":
+        return (
+            "The JD page exceeded the 5 MB safe-fetch cap. Real job postings "
+            "are typically under 100 KB. If this is a legitimate large page, "
+            "fetch the description manually and paste it into the Notion row."
+        )
+
     return None
 
 

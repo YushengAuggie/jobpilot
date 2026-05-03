@@ -55,6 +55,20 @@ class TestHintFor:
         assert hint is not None
         assert "ANTHROPIC_API_KEY" in hint
 
+    def test_hint_for_unsafe_url(self) -> None:
+        from jobpilot._safe_http import UnsafeURLError
+
+        hint = _hint_for(UnsafeURLError("refusing private/loopback host 10.0.0.5"))
+        assert hint is not None
+        assert "SSRF" in hint
+
+    def test_hint_for_response_too_large(self) -> None:
+        from jobpilot._safe_http import ResponseTooLargeError
+
+        hint = _hint_for(ResponseTooLargeError("response from x exceeded 5242880 bytes"))
+        assert hint is not None
+        assert "5 MB" in hint
+
     def test_hint_for_unknown_error(self) -> None:
         hint = _hint_for(RuntimeError("something completely unrelated"))
         assert hint is None

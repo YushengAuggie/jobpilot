@@ -6,7 +6,7 @@ import logging
 from dataclasses import dataclass
 
 from jobpilot.config import require_env
-from jobpilot.filters import canonical_url, has_dealbreaker, passes_filters
+from jobpilot.filters import canonical_url, dealbreaker_haystack, has_dealbreaker, passes_filters
 from jobpilot.models import JobPosting, Profile, ScoredPosting
 from jobpilot.notion_sink import NotionSink
 from jobpilot.score import Scorer
@@ -106,7 +106,7 @@ def run_daily(
         before = len(new_postings)
         new_postings = [
             p for p in new_postings
-            if not has_dealbreaker(p.jd_text, profile.dealbreakers)
+            if not has_dealbreaker(dealbreaker_haystack(p), profile.dealbreakers)
         ]
         dropped = before - len(new_postings)
         if dropped:

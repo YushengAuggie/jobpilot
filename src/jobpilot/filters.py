@@ -5,7 +5,7 @@ from __future__ import annotations
 import re
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from jobpilot.models import Profile, ScoredPosting, Stage
+from jobpilot.models import JobPosting, Profile, ScoredPosting, Stage
 
 SALARY_NUMBER_RE = re.compile(r"\$?\s*([\d,]+)\s*(k|K|,000)?")
 TRACKING_PARAM_PREFIXES = ("utm_", "gh_", "lever_", "ashby_")
@@ -26,6 +26,8 @@ def canonical_url(url: str) -> str:
 
 
 _K_SUFFIX_RE = re.compile(r"\b\d+\s*k\b", flags=re.IGNORECASE)
+# Phrases that look like a salary number with a 'k' suffix but aren't compensation.
+_NON_SALARY_K_RE = re.compile(r"\b401\s*\(?k\)?\b", flags=re.IGNORECASE)
 
 
 def parse_min_salary(text: str) -> int | None:
@@ -33,14 +35,19 @@ def parse_min_salary(text: str) -> int | None:
     Returns None if no number found. We use the minimum to compare against profile floor.
 
     Handles ranges like '$220-280k' by treating bare numbers as 'k' when a 'k' suffix
-    appears as a standalone token in the same string. The earlier substring check
-    ('k' anywhere in text) was overeager — '401k', 'stock options', 'kotlin', etc.
-    all triggered the multiplication branch."""
+    appears as a standalone token in the same string. Strips known non-salary 'k'
+    phrases ('401k', '401(k)') first so a retirement-plan mention can't masquerade
+    as a $401,000 base salary."""
+    text = _NON_SALARY_K_RE.sub("", text)
     has_k_token = bool(_K_SUFFIX_RE.search(text))
     matches = SALARY_NUMBER_RE.findall(text)
     values = []
     for raw, suffix in matches:
-        n = int(raw.replace(",", ""))
+        # SALARY_NUMBER_RE.[\d,]+ can match a lone comma — skip non-numeric.
+        cleaned = raw.replace(",", "")
+        if not cleaned.isdigit():
+            continue
+        n = int(cleaned)
         if suffix and suffix.lower() == "k" or has_k_token and n < 1000:
             n *= 1000
         if n >= 1000:
@@ -48,11 +55,26 @@ def parse_min_salary(text: str) -> int | None:
     return min(values) if values else None
 
 
-def has_dealbreaker(jd_text: str, dealbreakers: list[str]) -> str | None:
-    """Returns the first matched dealbreaker keyword, or None."""
-    haystack = jd_text.lower()
+def dealbreaker_haystack(posting: JobPosting) -> str:
+    """Concatenate searchable fields for dealbreaker scanning. Title and company
+    matter — a posting titled 'Senior Crypto Engineer' with a clean body should
+    still match a 'crypto' dealbreaker."""
+    return f"{posting.title} {posting.company} {posting.jd_text}"
+
+
+def has_dealbreaker(text: str, dealbreakers: list[str]) -> str | None:
+    """Returns the first matched dealbreaker keyword, or None.
+
+    Uses word-boundary matching so short keywords ('ai', 'ml', 'ny') don't
+    false-match common substrings ('available', 'html', 'any'). Callers that
+    want to check title + company + body should concatenate them before
+    passing in."""
+    if not dealbreakers:
+        return None
+    haystack = text.lower()
     for kw in dealbreakers:
-        if kw.lower() in haystack:
+        pattern = rf"\b{re.escape(kw.lower())}\b"
+        if re.search(pattern, haystack):
             return kw
     return None
 
@@ -64,7 +86,7 @@ def passes_filters(sp: ScoredPosting, profile: Profile) -> tuple[bool, str | Non
 
     posting = sp.posting
 
-    deal = has_dealbreaker(posting.jd_text, profile.dealbreakers)
+    deal = has_dealbreaker(dealbreaker_haystack(posting), profile.dealbreakers)
     if deal:
         return False, f"dealbreaker: {deal!r}"
 

@@ -85,34 +85,50 @@ def safe_get(
     max_bytes: int = DEFAULT_MAX_BYTES,
     follow_redirects: bool = True,
     headers: dict[str, str] | None = None,
+    max_redirects: int = 10,
 ) -> httpx.Response:
-    """GET with scheme/host/size guards. Returns a Response with .text materialized."""
+    """GET with scheme/host/size guards. Returns a Response with .text materialized.
+
+    Redirects are followed manually so each hop is validated BEFORE httpx fetches
+    it. Letting httpx auto-redirect would mean an attacker page can 302 to
+    http://10.0.0.5/admin and httpx GETs the internal URL before any final-URL
+    validation runs.
+    """
     _validate_url(url)
     client_kwargs: dict = {
         "timeout": timeout,
-        "follow_redirects": follow_redirects,
+        "follow_redirects": False,  # manual redirect handling — see docstring
     }
     if headers:
         client_kwargs["headers"] = headers
 
-    body = bytearray()
-    with httpx.Client(**client_kwargs) as client, client.stream("GET", url) as resp:
-        # Re-validate the final URL after redirects.
-        if str(resp.url) != url:
-            _validate_url(str(resp.url))
-        resp.raise_for_status()
-        for chunk in resp.iter_bytes():
-            body.extend(chunk)
-            if len(body) > max_bytes:
-                raise ResponseTooLargeError(
-                    f"response from {url} exceeded {max_bytes} bytes"
+    current_url = url
+    with httpx.Client(**client_kwargs) as client:
+        for _ in range(max_redirects + 1):
+            with client.stream("GET", current_url) as resp:
+                if follow_redirects and 300 <= resp.status_code < 400:
+                    location = resp.headers.get("location")
+                    if location:
+                        next_url = str(httpx.URL(current_url).join(location))
+                        _validate_url(next_url)
+                        current_url = next_url
+                        continue
+                resp.raise_for_status()
+                body = bytearray()
+                for chunk in resp.iter_bytes():
+                    body.extend(chunk)
+                    if len(body) > max_bytes:
+                        raise ResponseTooLargeError(
+                            f"response from {current_url} exceeded {max_bytes} bytes"
+                        )
+                # Re-create the Response with the buffered body so .text and
+                # .json() work after the stream context exits.
+                return httpx.Response(
+                    status_code=resp.status_code,
+                    headers=resp.headers,
+                    content=bytes(body),
+                    request=resp.request,
                 )
-    # httpx.Response.text reads from _content, which the streamed reader
-    # populates lazily. Re-create a Response with our body so .text and
-    # .json() work normally on the caller side.
-    return httpx.Response(
-        status_code=resp.status_code,
-        headers=resp.headers,
-        content=bytes(body),
-        request=resp.request,
-    )
+        raise httpx.TooManyRedirects(
+            f"exceeded {max_redirects} redirects starting at {url}"
+        )
