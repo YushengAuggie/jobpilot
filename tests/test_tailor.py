@@ -134,7 +134,7 @@ class TestTailorer:
 
         for call in client.messages.create.call_args_list:
             assert call.kwargs["temperature"] == 0
-            assert call.kwargs["model"] == "claude-sonnet-4-6"
+            assert call.kwargs["model"] == "claude-opus-4-7"
 
     def test_cache_control_on_rubric_and_profile_block(self, tmp_path: Path) -> None:
         resume_file = tmp_path / "r.md"

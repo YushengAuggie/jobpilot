@@ -153,4 +153,4 @@ class TestScorer:
         Scorer(client=client).score(_profile(), _posting())
 
         # Pinned to a specific model — drift is a deliberate change, not silent
-        assert client.messages.create.call_args.kwargs["model"] == "claude-sonnet-4-6"
+        assert client.messages.create.call_args.kwargs["model"] == "claude-opus-4-7"

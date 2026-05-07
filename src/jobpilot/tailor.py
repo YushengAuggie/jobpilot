@@ -22,7 +22,7 @@ from jobpilot.models import JobPosting, Profile
 
 logger = logging.getLogger(__name__)
 
-TAILOR_MODEL = "claude-sonnet-4-6"
+TAILOR_MODEL = "claude-opus-4-7"
 RESUME_MAX_TOKENS = 2500
 COVER_LETTER_MAX_TOKENS = 800
 

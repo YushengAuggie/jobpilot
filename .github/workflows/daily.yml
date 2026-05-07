@@ -34,9 +34,26 @@ jobs:
           fi
           printf '%s' "$PROFILE_YAML" > profile.yaml
 
+      - name: Verify required secrets
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+          NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
+          NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
+        run: |
+          missing=()
+          for var in ANTHROPIC_API_KEY ANTHROPIC_BASE_URL NOTION_TOKEN NOTION_DB_ID; do
+            if [ -z "${!var}" ]; then missing+=("$var"); fi
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing secrets: ${missing[*]}. Add them under Settings → Secrets → Actions."
+            exit 1
+          fi
+
       - name: Run daily pipeline
         env:
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
           NOTION_TOKEN: ${{ secrets.NOTION_TOKEN }}
           NOTION_DB_ID: ${{ secrets.NOTION_DB_ID }}
         run: uv run python -m jobpilot run-daily

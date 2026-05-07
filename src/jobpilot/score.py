@@ -28,7 +28,7 @@ def _extract_json(text: str) -> str:
     """Strip markdown code fences if present. Returns the inner JSON string."""
     return _FENCE_PATTERN.sub("", text.strip()).strip()
 
-SCORING_MODEL = "claude-sonnet-4-6"
+SCORING_MODEL = "claude-opus-4-7"
 MAX_RESPONSE_TOKENS = 400
 JD_CHAR_CAP = 6000
 
