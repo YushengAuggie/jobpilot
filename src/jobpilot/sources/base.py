@@ -8,16 +8,16 @@ from jobpilot.models import JobPosting, Profile
 
 
 class Source(Protocol):
-    """A job posting source. Stateless; can be re-instantiated per run."""
+    """A job posting source. Stateless; can be re-instantiated per run.
+
+    Failures during list_jobs propagate as exceptions; the pipeline catches them
+    per-source so one broken source doesn't kill the run.
+    """
 
     name: str
 
     def list_jobs(self, profile: Profile, limit: int = 0) -> list[JobPosting]:
         """Fetch postings. limit=0 means no cap."""
-        ...
-
-    def health(self) -> tuple[bool, str]:
-        """Returns (ok, reason). Used by run-daily to skip broken sources gracefully."""
         ...
 
 

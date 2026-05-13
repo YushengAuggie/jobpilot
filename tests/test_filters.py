@@ -79,6 +79,11 @@ class TestSalaryParse:
             ("competitive", None),
             ("up to $300,000", 300_000),
             ("80k-95k", 80_000),
+            # 401k retirement mention shouldn't masquerade as a $401,000 salary.
+            ("Great benefits, 401k matching", None),
+            ("401(k) plan offered", None),
+            # But a real salary alongside a 401k mention should still be parsed.
+            ("$220-280k base, plus 401k matching", 220_000),
         ],
     )
     def test_parses(self, text: str, expected: int | None) -> None:
@@ -94,6 +99,33 @@ class TestDealbreaker:
 
     def test_empty_dealbreakers(self) -> None:
         assert has_dealbreaker("anything", []) is None
+
+    def test_word_boundary_short_keyword_does_not_false_match(self) -> None:
+        """Short keywords like 'ai' must not match 'available', 'mail', etc.
+        Substring matching here would silently drop every posting once a user
+        adds a 2-3 char dealbreaker."""
+        assert has_dealbreaker("Position available immediately", ["ai"]) is None
+        assert has_dealbreaker("html and css experience", ["ml"]) is None
+
+    def test_word_boundary_real_match_still_works(self) -> None:
+        assert has_dealbreaker("We use AI extensively", ["ai"]) == "ai"
+        assert has_dealbreaker("Senior ML engineer", ["ml"]) == "ml"
+
+
+class TestPassesFiltersDealbreakerExtended:
+    def test_dealbreaker_matches_title(self) -> None:
+        """An attacker-or-honest posting titled 'Crypto Engineer' with a
+        clean body should still be filtered."""
+        sp = _scored(title="Senior Crypto Engineer", jd_text="Distributed systems")
+        passed, reason = passes_filters(sp, _profile())
+        assert passed is False
+        assert "dealbreaker" in (reason or "")
+
+    def test_dealbreaker_matches_company(self) -> None:
+        sp = _scored(company="Crypto Corp", jd_text="Building reliable services")
+        passed, reason = passes_filters(sp, _profile())
+        assert passed is False
+        assert "dealbreaker" in (reason or "")
 
 
 class TestPassesFilters:

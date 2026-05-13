@@ -18,7 +18,9 @@ class Stage(StrEnum):
     UNKNOWN = "unknown"
 
 
-SourceName = Literal["yc", "greenhouse", "lever", "ashby", "hn", "linkedin"]
+# Closed list — keep in sync with sources/__init__.py imports and
+# notion_sink.SOURCE_OPTIONS. Adding a 5th source means editing all three.
+SourceName = Literal["greenhouse", "lever", "ashby", "hn"]
 
 
 class JobPosting(BaseModel):

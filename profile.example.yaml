@@ -43,14 +43,16 @@ dealbreakers:
 
 # Companies whose ATS boards to scrape directly.
 # Find the slug in the URL: boards.greenhouse.io/<slug>, jobs.lever.co/<slug>, jobs.ashbyhq.com/<slug>
-ats_boards:
-  greenhouse:
-    - stripe
-    - anthropic
-  lever:
-    - figma
-  ashby:
-    - linear
+# Empty by default — uncomment + edit. Examples shown below as a starting point;
+# the slugs may go stale (companies move between ATS providers), so verify each.
+ats_boards: {}
+  # greenhouse:
+  #   - stripe
+  #   - anthropic
+  # lever:
+  #   - mercury
+  # ashby:
+  #   - linear
 
 # Notion DB ID (resolved from .env). Run `jobpilot init-notion` to create one,
 # then paste the returned ID into .env. Until then, the placeholder default lets

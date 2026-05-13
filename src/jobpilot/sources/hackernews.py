@@ -31,14 +31,6 @@ class HackerNewsSource:
         self.max_comments = max_comments
         self.timeout = timeout
 
-    def health(self) -> tuple[bool, str]:
-        try:
-            r = httpx.get(ALGOLIA_SEARCH, params={"query": "test"}, timeout=self.timeout)
-            r.raise_for_status()
-            return True, "ok"
-        except Exception as e:
-            return False, f"{type(e).__name__}: {e}"
-
     def list_jobs(self, profile: Profile, limit: int = 0) -> list[JobPosting]:
         with httpx.Client(timeout=self.timeout) as client:
             story_id = self._latest_who_is_hiring_id(client)

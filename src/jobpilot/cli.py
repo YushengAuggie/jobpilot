@@ -23,6 +23,7 @@ from rich.table import Table
 # in their working directory.
 load_dotenv(Path.cwd() / ".env")
 
+from jobpilot._errors import friendly_errors  # noqa: E402
 from jobpilot._jd_fetch import fetch_jd_text  # noqa: E402
 from jobpilot.config import load_profile, require_env  # noqa: E402
 from jobpilot.models import JobPosting  # noqa: E402
@@ -66,6 +67,7 @@ def _setup_logging(verbose: bool) -> None:
 
 
 @app.command("init-notion")
+@friendly_errors()
 def init_notion(
     parent_page_id: str = typer.Option(
         ...,
@@ -82,6 +84,7 @@ def init_notion(
 
 
 @app.command("parse-resume")
+@friendly_errors()
 def parse_resume(
     path: Path = typer.Argument(..., help="Path to your resume PDF or markdown."),
     profile_out: Path = typer.Option(
@@ -109,6 +112,7 @@ def parse_resume(
 
 
 @app.command("run-daily")
+@friendly_errors()
 def run_daily(
     dry_run: bool = typer.Option(False, "--dry-run", help="Skip Notion writes."),
     no_score: bool = typer.Option(
@@ -164,6 +168,7 @@ def run_daily(
 
 
 @app.command("tailor")
+@friendly_errors()
 def tailor(
     limit: int = typer.Option(0, "--limit", help="Cap rows processed (0 = all Approved rows)."),
     dry_run: bool = typer.Option(
@@ -253,6 +258,7 @@ def tailor(
 
 
 @app.command("apply-pending")
+@friendly_errors()
 def apply_pending(
     limit: int = typer.Option(0, "--limit", help="Cap rows processed (0 = all)."),
     output_dir: Path = typer.Option(

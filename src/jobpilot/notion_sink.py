@@ -40,12 +40,10 @@ STATUS_OPTIONS = [
 SOURCE_OPTIONS = [
     {"name": s, "color": c}
     for s, c in [
-        ("yc", "orange"),
         ("greenhouse", "green"),
         ("lever", "blue"),
         ("ashby", "purple"),
         ("hn", "pink"),
-        ("linkedin", "default"),
     ]
 ]
 
